@@ -60,7 +60,7 @@ KEY_TAP_HOLD = 0.02
 
 # Max gap between a release and the next same-direction press to count as a
 # double-press.
-DOUBLE_PRESS_WINDOW = 0.6
+DOUBLE_PRESS_WINDOW = 0.15
 
 # Hold "exit" at least this long to trigger F5 (refresh) instead of Esc.
 EXIT_HOLD_SECONDS = 2.5
@@ -187,6 +187,7 @@ def run_cec_parser():
     # time its hold ended.
     last_dir = None
     last_release_time = 0.0
+    press_count = 0
 
     try:
         process = subprocess.Popen(
@@ -219,13 +220,22 @@ def run_cec_parser():
 
                 if key_name in DELTAS:
                     now = time.monotonic()
-                    is_double = (
-                        key_name == last_dir
-                        and (now - last_release_time) < DOUBLE_PRESS_WINDOW
-                    )
-                    if is_double and key_name in SCROLL_DIRECTION:
+                    
+                    # Check if this continues a sequence: same direction + within window
+                    if key_name == last_dir and (now - last_release_time) < DOUBLE_PRESS_WINDOW:
+                        press_count += 1
+                    else:
+                        # New direction or timeout → reset to 1
+                        press_count = 1
+                    
+                    last_dir = key_name
+                    last_release_time = now
+
+                    # Triple press (3rd press) triggers scroll
+                    if press_count >= 3 and key_name in SCROLL_DIRECTION:
                         scroll_mouse(ui_mouse, key_name, process)
-                        # Reset so a third quick press starts fresh.
+                        # Reset so next press starts fresh
+                        press_count = 0
                         last_dir = None
                         last_release_time = 0.0
                     else:
